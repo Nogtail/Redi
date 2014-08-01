@@ -17,7 +17,6 @@ public class Redi {
 	private static final int DEFAULT_INTERVAL = 100;
 	private static final int DEFAULT_THREADS = 8;
 
-	private final Lock lock = new ReentrantLock();
 	private final Map<String, RediObject> objects = new ConcurrentHashMap<String, RediObject>();
 	private final JedisPool jedisPool;
 	private final ScheduledExecutorService objectUpdateExecutor = Executors.newSingleThreadScheduledExecutor();
