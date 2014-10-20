@@ -27,9 +27,11 @@ public class FieldSetTask implements Runnable {
 		} catch (JedisConnectionException e) {
 			jedisPool.returnBrokenResource(jedis);
 			jedis = null;
+			instance.setConnected(false);
 		} finally {
 			if (jedis != null) {
 				jedisPool.returnResource(jedis);
+				instance.setConnected(true);
 			}
 		}
 	}
