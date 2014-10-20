@@ -19,19 +19,21 @@ public class ObjectGetTask implements Runnable {
 
 	public void run() {
 		JedisPool jedisPool = instance.getJedisPool();
-		Jedis jedis = jedisPool.getResource();
+		Jedis jedis = null;
 
 		try {
+			jedis = jedisPool.getResource();
 			HashMap<String, String> values = (HashMap<String, String>) jedis.hgetAll(name);
 			RediObject object = new RediObject(name, values, instance);
 			instance.getObjects().put(name, object);
 		} catch (JedisConnectionException e) {
 			jedisPool.returnBrokenResource(jedis);
 			jedis = null;
-			// TODO Something happened, let's fix it...
+			instance.setConnected(false);
 		} finally {
 			if (jedis != null) {
 				jedisPool.returnResource(jedis);
+				instance.setConnected(true);
 			}
 		}
 	}

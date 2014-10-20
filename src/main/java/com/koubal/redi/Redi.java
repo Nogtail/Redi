@@ -3,12 +3,13 @@ package com.koubal.redi;
 import com.koubal.redi.task.ObjectGetTask;
 import com.koubal.redi.task.ObjectUpdateTask;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import java.util.Map;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Redi {
 	private static final int DEFAULT_PORT = 6379;
@@ -17,10 +18,12 @@ public class Redi {
 	private static final int DEFAULT_INTERVAL = 100;
 	private static final int DEFAULT_THREADS = 8;
 
+	private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 	private final Map<String, RediObject> objects = new ConcurrentHashMap<String, RediObject>();
 	private final JedisPool jedisPool;
 	private final ScheduledExecutorService objectUpdateExecutor = Executors.newSingleThreadScheduledExecutor();
 	private final ExecutorService threadPool;
+	private volatile boolean connected;
 
 	public Redi(String host) {
 		this(host, DEFAULT_PORT);
@@ -52,12 +55,25 @@ public class Redi {
 		}
 
 		objectUpdateExecutor.scheduleWithFixedDelay(new ObjectUpdateTask(this), 0, interval, TimeUnit.MILLISECONDS);
+		Jedis jedis = null;
+
+		try {
+			jedis = jedisPool.getResource();
+		} catch (JedisConnectionException e) {
+			jedisPool.returnBrokenResource(jedis);
+			jedis = null;
+			connected = false;
+		} finally {
+			if (jedis != null) {
+				jedisPool.returnResource(jedis);
+				connected = true;
+			}
+		}
 	}
 
 	public void close() {
 		objectUpdateExecutor.shutdownNow();
 		threadPool.shutdownNow();
-
 		jedisPool.destroy();
 	}
 
@@ -83,12 +99,20 @@ public class Redi {
 		objects.remove(name);
 	}
 
+	public boolean isConnected() {
+		return connected;
+	}
+
+	public void setConnected(Boolean connected) {
+		this.connected = connected;
+	}
+
 	public void lock() {
-		lock.lock();
+		lock.readLock().lock();
 	}
 
 	public void unlock() {
-		lock.unlock();
+		lock.readLock().unlock();
 	}
 
 	public Map<String, RediObject> getObjects() {
